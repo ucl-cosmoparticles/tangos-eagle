@@ -1,0 +1,26 @@
+#!/bin/bash -l
+
+#SBATCH --ntasks 20
+#SBATCH -J tangos
+#SBATCH -o ./logs/tangos.out
+#SBATCH -e ./logs/tangos.err
+#SBATCH -p COMPUTE
+#SBATCH -t 2880 # minutes run time
+
+##########################################################
+
+export TANGOS_SIM='EAGLE/GM/halo_049/RECAL/z2_od_1p000/SEED42'
+export TANGOS_TYPE='halo'
+export TANGOS_PROPERTY='kappa_co'
+
+export TANGOS_LOADMODE='server'
+
+export TANGOS_PREREQS='' # add --with-prerequisites to compute any prereqs
+
+export TANGOS_EXTRAS='--force' # add --force to recompute
+
+##########################################################
+
+mpirun -np $SLURM_NTASKS tangos write $TANGOS_PROPERTY $TANGOS_PREREQS --type=$TANGOS_TYPE --for $TANGOS_SIM --load-mode $TANGOS_LOADMODE --backend mpi4py $TANGOS_EXTRAS
+
+tangos remove-duplicates

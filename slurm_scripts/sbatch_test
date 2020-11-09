@@ -1,0 +1,24 @@
+#!/bin/bash -l
+
+#SBATCH --ntasks 20
+#SBATCH -J tangos
+#SBATCH -o ./tangos.out
+#SBATCH -e ./tangos.err
+#SBATCH -p SMP
+#SBATCH -t 2880 # minutes run time
+
+##########################################################
+
+sim="halo_049"
+model="RECAL"
+seed="SEED42"
+
+export TANGOS_MAX_OBJECTS=20
+
+##########################################################
+
+declare -a arr=("z2_od_0p950" "z2_od_0p975" "z2_od_0p988" "z2_od_1p000" "z2_od_1p013" "z2_od_1p025" "z2_od_1p050")
+
+gm=${arr[$SLURM_ARRAY_TASK_ID]}
+
+echo ${gm}

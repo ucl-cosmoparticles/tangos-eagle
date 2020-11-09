@@ -1,0 +1,39 @@
+#!/bin/bash -l
+
+#SBATCH --ntasks 20
+#SBATCH -J tangos
+#SBATCH -o ./logs/tangos.out
+#SBATCH -e ./logs/tangos.err
+#SBATCH -p SMP
+#SBATCH -t 2880 # minutes run time
+
+##########################################################
+
+sim="halo_049"
+model="RECAL"
+gm="z2_od_1p050"
+seed="SEED42"
+
+export TANGOS_TYPE='halo'
+export TANGOS_LOADMODE='server'
+
+export TANGOS_EXTRAS='--force' # add --force to recompute
+
+##########################################################
+
+export TANGOS_SIM="liverpool/EAGLE/GM/${sim}/${model}/${gm}/${seed}"
+
+
+mpirun -np $SLURM_NTASKS tangos write r200 --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --load-mode $TANGOS_LOADMODE --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write M200 --type=$TANGOS_TYPE --for $TANGOS_SIM --load-mode $TANGOS_LOADMODE --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write f_CGM --type=$TANGOS_TYPE --for $TANGOS_SIM --load-mode $TANGOS_LOADMODE --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write M_BH --type=$TANGOS_TYPE --for $TANGOS_SIM --load-mode $TANGOS_LOADMODE --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write Mstar_30kpc --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --load-mode $TANGOS_LOADMODE --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write kappa_co --type=$TANGOS_TYPE --for $TANGOS_SIM --load-mode $TANGOS_LOADMODE --backend mpi4py $TANGOS_EXTRAS
+
+tangos remove-duplicates

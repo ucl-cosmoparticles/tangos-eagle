@@ -1,3 +1,9 @@
+# User-defined
+pynbody_testing
+slurm_scripts/logs/
+analysis/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
