@@ -10,18 +10,35 @@
 ##########################################################
 
 sim="halo_049"
-model="RECAL"
-seed="SEED42"
+model="DMONLY"
 
 export TANGOS_MAX_OBJECTS=20
 
 ##########################################################
+# ICs
 
-declare -a arr=("z2_od_0p950" "z2_od_0p975" "z2_od_0p988" "z2_od_1p000" "z2_od_1p013" "z2_od_1p025" "z2_od_1p050")
+# declare -a ics=("z2_od_0p950" "z2_od_0p975" "z2_od_0p988" "z2_od_1p000" "z2_od_1p013" "z2_od_1p025" "z2_od_1p050")
+# declare -a ics=("z2_od_0p950" "z2_od_1p000" "z2_od_1p050")
+# declare -a ics=("z2_od_0p950" "z2_od_1p050")
+declare -a ics=("z2_od_1p000_var0p9" "z2_od_1p000" "z2_od_1p000_var1p1")
 
-gm=${arr[$SLURM_ARRAY_TASK_ID]}
+# ic="z2_od_1p000"
+ic=${ics[$SLURM_ARRAY_TASK_ID]}
 
-export TANGOS_SIM="liverpool/EAGLE/GM/${sim}/${model}/${gm}/${seed}"
+##########################################################
+# Seeds
+
+declare -a seeds=("SEED42" "SEED01" "SEED02" "SEED03" "SEED04" "SEED05" "SEED06" "SEED07" "SEED08" "SEED09")
+
+seed="SEED42"
+# seed=${seeds[$SLURM_ARRAY_TASK_ID]}
+
+
+##########################################################
+
+
+# export TANGOS_SIM="liverpool/EAGLE/GM/${sim}/${model}/${ic}/${seed}"
+export TANGOS_SIM="EAGLE/GM/${sim}/${model}/${ic}/${seed}"
 
 
 python ../tangos_eagle/assign_subgroupnumbers.py $TANGOS_SIM

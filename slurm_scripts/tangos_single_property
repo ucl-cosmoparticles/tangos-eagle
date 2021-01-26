@@ -9,17 +9,42 @@
 
 ##########################################################
 
-export TANGOS_SIM='EAGLE/GM/halo_049/RECAL/z2_od_1p000/SEED42'
+export TANGOS_PROPERTY='finder_star_mass'
+
+##########################################################
+
+sim="halo_049"
+model="RECAL"
+
 export TANGOS_TYPE='halo'
-export TANGOS_PROPERTY='kappa_co'
-
 export TANGOS_LOADMODE='server'
-
-export TANGOS_PREREQS='' # add --with-prerequisites to compute any prereqs
 
 export TANGOS_EXTRAS='--force' # add --force to recompute
 
+
 ##########################################################
+# ICs
+
+# declare -a ics=("z2_od_0p950" "z2_od_0p975" "z2_od_0p988" "z2_od_1p000" "z2_od_1p013" "z2_od_1p025" "z2_od_1p050")
+declare -a ics=("z2_od_0p950" "z2_od_1p000" "z2_od_1p050")
+# declare -a ics=("z2_od_0p950" "z2_od_1p050")
+
+# ic="z2_od_1p000"
+ic=${ics[$SLURM_ARRAY_TASK_ID]}
+
+##########################################################
+# Seeds
+
+declare -a seeds=("SEED42" "SEED01" "SEED02" "SEED03" "SEED04" "SEED05" "SEED06" "SEED07" "SEED08" "SEED09")
+
+seed="SEED02"
+# seed=${seeds[$SLURM_ARRAY_TASK_ID]}
+
+##########################################################
+
+export TANGOS_SIM="liverpool/EAGLE/GM/${sim}/${model}/${ic}/${seed}"
+# export TANGOS_SIM="EAGLE/GM/${sim}/${model}/${ic}/${seed}"
+
 
 mpirun -np $SLURM_NTASKS tangos write $TANGOS_PROPERTY $TANGOS_PREREQS --type=$TANGOS_TYPE --for $TANGOS_SIM --load-mode $TANGOS_LOADMODE --backend mpi4py $TANGOS_EXTRAS
 
