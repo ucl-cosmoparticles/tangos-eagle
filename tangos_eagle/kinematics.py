@@ -273,12 +273,12 @@ def morphological_diagnostics(XYZ,mass,Vxyz,aperture=0.03,CoMvelocity=True,reduc
         # Permute base and align Y axis with minor axis in momentum direction
         sign = int(np.sign(np.sum(momentum*structmainaxe)+np.finfo(float).tiny))
         structmainaxe *= sign
-        temp = np.array([1,sign,1])*(eigvec[:,(np.argmin(eigval)+np.array([(3+sign)/2,0,(3-sign)/2]))%3])
-        eigval = eigval[(np.argmin(eigval)+np.array([(3+sign)/2,0,(3-sign)/2]))%3]
+        temp = np.array([1,sign,1])*(eigvec[:,(np.argmin(eigval)+np.array([(3+sign)//2,0,(3-sign)//2]))%3])
+        eigval = eigval[(np.argmin(eigval)+np.array([(3+sign)//2,0,(3-sign)//2]))%3]
         
         # Permute base to align Z axis with major axis
-        foo = (np.argmax(eigval)/2)*2
-        temp = np.array([(-1)**(1+foo/2),1,1])*(temp[:,[2-foo,1,foo]])
+        foo = (np.argmax(eigval)//2)*2
+        temp = np.array([(-1)**(1+foo//2),1,1])*(temp[:,[2-foo,1,foo]])
         eigval = eigval[[2-foo,1,foo]]
         
         # Compute change of basis matrix
