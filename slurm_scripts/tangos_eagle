@@ -1,0 +1,100 @@
+#!/bin/bash -l
+
+#SBATCH --ntasks 40
+#SBATCH -J tangos
+#SBATCH -o ./logs/tangos.out
+#SBATCH -e ./logs/tangos.err
+#SBATCH -p CORES40
+#SBATCH -t 2880 # minutes run time
+#SBATCH --exclusive
+
+##########################################################
+
+sim="halo_049"
+model="NOAGN"
+
+export TANGOS_MAX_OBJECTS=20
+
+export TANGOS_TYPE='halo'
+# export TANGOS_LOADMODE='server'
+
+export TANGOS_EXTRAS='--force --verbose' # add --force to recompute
+# export TANGOS_EXTRAS='--verbose' # add --force to recompute
+
+##########################################################
+# ICs
+
+# declare -a ics=("z2_od_0p950" "z2_od_1p000" "z2_od_1p050" "z2_od_1p300" "z2_od_1p500")
+# declare -a ics=("z2_od_0p950" "z2_od_1p050")
+# declare -a ics=("z2_od_1p000_merger_z1p7_0p800" "z2_od_1p000_merger_z1p7_0p900" "z2_od_1p000" "z2_od_1p000_merger_z1p7_1p100" "z2_od_1p000_merger_z1p7_1p200")
+# declare -a ics=("z2_od_1p000_merger_z1p7_0p800" "z2_od_1p000" "z2_od_1p000_merger_z1p7_1p200")
+# declare -a ics=("z2_od_1p000_merger_z1p7_0p800" "z2_od_1p000" "z2_od_1p000_merger_z1p7_1p200")
+# declare -a ics=("z2_od_1p050_merger_z2p4_0p800" "z2_od_1p050_merger_z2p4_1p200")
+# declare -a ics=("z2_od_1p050_merger_z2p4_0p800" "z2_od_1p050" "z2_od_1p050_merger_z2p4_1p200")
+# declare -a ics=("z2_od_1p050_merger_z2p4_1p000" "z2_od_1p050_merger_z2p4_1p000_test")
+# declare -a ics=("assembly_new_ids/z2_od_1p500" "assembly_new_ids/z2_od_1p200")
+declare -a ics=("z2_od_1p000_merger_z1p7_0p800" "z2_od_1p000_merger_z1p7_1p100")
+
+
+ic="z2_od_1p000_merger_z1p7_0p800"
+# ic="z2_od_1p000_vischi"
+# ic=${ics[$SLURM_ARRAY_TASK_ID]}
+
+##########################################################
+# Seeds
+
+declare -a seeds=("SEED42" "SEED01" "SEED02" "SEED03" "SEED04" "SEED05" "SEED06" "SEED07" "SEED08")
+
+# seed="SEED08"
+seed=${seeds[$SLURM_ARRAY_TASK_ID]}
+
+##########################################################
+# Build path
+
+export TANGOS_SIM="EAGLE/GM/${sim}/${model}/${ic}/${seed}"
+
+##########################################################
+# Adding simulation to database
+
+mpirun -np $SLURM_NTASKS python ../tangos_eagle/assign_subgroupnumbers_mpi.py $TANGOS_SIM
+# python ../tangos_eagle/assign_subgroupnumbers.py $TANGOS_SIM
+# 
+tangos add $TANGOS_SIM --max-objects $TANGOS_MAX_OBJECTS
+
+tangos import-properties --for $TANGOS_SIM
+
+mpirun -np $SLURM_NTASKS tangos link --for $TANGOS_SIM --backend mpi4py
+
+##########################################################
+# Compute properties
+
+mpirun -np $SLURM_NTASKS tangos write r200 --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write M200 --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+# mpirun -np $SLURM_NTASKS tangos write concentration --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write finder_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+# #
+mpirun -np $SLURM_NTASKS tangos write finder_star_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write f_CGM --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write Mstar_30kpc --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+# mpirun -np $SLURM_NTASKS tangos write M_BH --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+# mpirun -np $SLURM_NTASKS tangos write BH_Density --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+# mpirun -np $SLURM_NTASKS tangos write f_star_hot --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
+mpirun -np $SLURM_NTASKS tangos write kappa_co --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+# #
+# mpirun -np $SLURM_NTASKS tangos write f_ex_situ --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
+# mpirun -np $SLURM_NTASKS tangos write t_cool_r200 --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+
+##########################################################
+# Cleanup
+
+tangos remove-duplicates

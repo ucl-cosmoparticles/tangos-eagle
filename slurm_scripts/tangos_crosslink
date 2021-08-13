@@ -1,17 +1,17 @@
 #!/bin/bash -l
 
-#SBATCH --ntasks 20
+#SBATCH --ntasks 1
 #SBATCH -J tangos-crosslink
 #SBATCH -o ./logs/crosslink.out
 #SBATCH -e ./logs/crosslink.err
-#SBATCH -p SMP
+#SBATCH -p COMPUTE
 #SBATCH -t 2880 # minutes run time
 
 ##########################################################
 
 sim="halo_049"
-model1="DMONLY"
-model2="DMONLY"
+model1="RECAL"
+model2="RECAL"
 seed="SEED42"
 
 export TANGOS_TYPE='halo'
@@ -21,10 +21,12 @@ export TANGOS_EXTRAS='--force' # add --force to recompute
 
 linkwith="z2_od_1p000"
 
-declare -a arr=("z2_od_1p000_merger_0p950" "z2_od_1p000_merger_1p050")
-# declare -a arr=("z2_od_1p000" "z2_od_1p000_merger_1p025")
+declare -a arr=("z2_od_1p000_merger_z1p7_0p800" "z2_od_1p000_merger_z1p7_0p900" "z2_od_1p000_merger_z1p7_1p100" "z2_od_1p000_merger_z1p7_1p200")
+# declare -a arr=("z2_od_1p000_merger_z1p7_0p900" "z2_od_1p000_merger_z1p7_1p100")
 
 tolink=${arr[$SLURM_ARRAY_TASK_ID]}
+
+# tolink="z2_od_1p000_merger_z1p7_0p800_hc"
 
 ##########################################################
 

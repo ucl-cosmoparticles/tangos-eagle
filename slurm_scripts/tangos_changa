@@ -1,0 +1,76 @@
+#!/bin/bash -l
+
+#SBATCH --ntasks 24
+#SBATCH -J tangos
+#SBATCH -o ./logs/tangos.out
+#SBATCH -e ./logs/tangos.err
+#SBATCH -p CORES24
+#SBATCH -t 2880 # minutes run time
+
+##########################################################
+
+sim="quench_2017/pioneer50h128.1536gst1.bwK1"
+
+export TANGOS_MAX_OBJECTS=20
+
+export TANGOS_TYPE='halo'
+# export TANGOS_LOADMODE='server'
+
+export TANGOS_EXTRAS='--force' # add --force to recompute
+
+##########################################################
+# Runs
+
+declare -a runs=("BH" "" "BH.con1" ".con1" "BH.con2b" ".con2b")
+
+# ic="z2_od_1p000"
+run=${runs[$SLURM_ARRAY_TASK_ID]}
+
+##########################################################
+# Build path
+
+export TANGOS_SIM="${sim}${run}"
+
+##########################################################
+# Adding simulation to database
+
+# tangos add $TANGOS_SIM --max-objects $TANGOS_MAX_OBJECTS
+#
+# tangos import-properties --for $TANGOS_SIM
+#
+# mpirun -np $SLURM_NTASKS tangos link --for $TANGOS_SIM --backend mpi4py
+
+##########################################################
+# Deal with BHs separately to everything else
+
+# tangos_add_bh --sims $TANGOS_SIM
+#
+# mpirun -np $SLURM_NTASKS tangos write BH_mass --type=bh --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+# ##########################################################
+# # Computing quantities
+#
+# mpirun -np $SLURM_NTASKS tangos write r200 --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
+# mpirun -np $SLURM_NTASKS tangos write M200 --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
+# mpirun -np $SLURM_NTASKS tangos write finder_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
+# mpirun -np $SLURM_NTASKS tangos write finder_star_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
+# mpirun -np $SLURM_NTASKS tangos write f_CGM --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
+# mpirun -np $SLURM_NTASKS tangos write Mstar_30kpc --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write kappa_co --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
+# mpirun -np $SLURM_NTASKS tangos write f_ex_situ --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+# mpirun -np $SLURM_NTASKS tangos write t_cool_r200 --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+# mpirun -np $SLURM_NTASKS tangos write f_star_hot --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+##########################################################
+# Cleanup
+
+tangos remove-duplicates

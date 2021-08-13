@@ -187,7 +187,8 @@ def kinematics_diagnostics(XYZ,mass,Vxyz,aperture=0.03,CoMvelocity=True,weightin
     delta = 1-(SigmaZ/SigmaO)**2
 
     # Return
-    return kappa,discfrac,vrotsig,delta,zaxis,Momentum
+    # JD edited - return the momentum per unit mass as well.
+    return kappa,discfrac,vrotsig,SigmaO,SigmaZ,delta,zaxis,Momentum,Momentum/np.sum(particles[:,3])
 
 def morphological_diagnostics(XYZ,mass,Vxyz,aperture=0.03,CoMvelocity=True,reduced_structure=True):
     """
@@ -223,7 +224,7 @@ def morphological_diagnostics(XYZ,mass,Vxyz,aperture=0.03,CoMvelocity=True,reduc
         The triaxiality parameter (a^2-b^2)/(a^2-c^2).
     Transform : array of dtype float, shape (3, 3)
         The orthogonal matrix representing the 3 axes as unit vectors: in real-world
-        coordinates, Transform[0] = major, Transform[1] = inter, Transform[2] = minor. 
+        coordinates, Transform[0] = major, Transform[1] = inter, Transform[2] = minor.
     abc : array of dtype float, shape (3, )
         The corresponding (a,b,c) lengths (in unit of length L).
 
@@ -260,42 +261,41 @@ def morphological_diagnostics(XYZ,mass,Vxyz,aperture=0.03,CoMvelocity=True,reduc
 
         # Compute structure tensor
         structure = np.sum((particles[:,3]/Rsph**2)[:,np.newaxis,np.newaxis]*(np.matmul(particles[:,:3,np.newaxis],particles[:,np.newaxis,:3])),axis=0)/np.sum(particles[:,3]/Rsph**2)
-        
+
         # Diagonalise structure tensor
         eigval,eigvec = linalg.eigh(structure)
-        
+
         # Get structure direct oriented orthonormal base
         eigvec[:,2]*=np.round(np.sum(np.cross(eigvec[:,0],eigvec[:,1])*eigvec[:,2]))
-        
+
         # Return minor axe
         structmainaxe = eigvec[:,np.argmin(eigval)].copy()
-        
+
         # Permute base and align Y axis with minor axis in momentum direction
         sign = int(np.sign(np.sum(momentum*structmainaxe)+np.finfo(float).tiny))
         structmainaxe *= sign
         temp = np.array([1,sign,1])*(eigvec[:,(np.argmin(eigval)+np.array([(3+sign)//2,0,(3-sign)//2]))%3])
         eigval = eigval[(np.argmin(eigval)+np.array([(3+sign)//2,0,(3-sign)//2]))%3]
-        
+
         # Permute base to align Z axis with major axis
         foo = (np.argmax(eigval)//2)*2
         temp = np.array([(-1)**(1+foo//2),1,1])*(temp[:,[2-foo,1,foo]])
         eigval = eigval[[2-foo,1,foo]]
-        
+
         # Compute change of basis matrix
         transform = linalg.inv(temp)
         stop = (np.max((1-np.sqrt(eigval[:2]/eigval[2])/np.array([q,s]))**2)<1e-4)
-        
+
         if (reduced_structure and not(stop)):
             q,s = np.sqrt(eigval[:2]/eigval[2])
             Rsphall = linalg.norm(np.matmul(transform,particlesall[:,:3,np.newaxis])[:,:,0]/np.array([q,s,1]),axis=1)
             extract = (Rsphall<aperture/(q*s)**(1/3.))
-    
+
     Transform = transform.copy()
     ellip = 1-np.sqrt(eigval[1]/eigval[2])
     triax = (1-eigval[0]/eigval[2])/(1-eigval[1]/eigval[2])
     Transform = Transform[...,[2,0,1],:] #so that transform[0] = major, transform[1] = inter, transform[2] = minor
     abc = np.sqrt(eigval[[2,0,1]])
-    
+
     # Return
     return ellip,triax,Transform,abc
-

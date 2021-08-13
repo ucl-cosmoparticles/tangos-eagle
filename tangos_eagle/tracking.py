@@ -27,7 +27,7 @@ class Tracking:
     def __init__(self,quantity,models,ics,
                         halo = 0,
                         volume='halo_049',
-                        num_seeds=0,
+                        num_seeds=1,
                         default_seed='SEED42',
                         sim_base='EAGLE_GM_'):
 
@@ -48,8 +48,11 @@ class Tracking:
             self.default_seed = default_seed
             self.sim_base = sim_base
 
+            # self.seeds = [self.default_seed,]
+            # self.seeds.extend(['SEED%02d'%s for s in np.arange(self.num_seeds)+1])
+
             self.seeds = [self.default_seed,]
-            self.seeds.extend(['SEED%02d'%s for s in np.arange(self.num_seeds)+1])
+            self.seeds.extend(['SEED%02d'%s for s in np.arange(self.num_seeds)[1:]])
 
             # Initialise storage dictionary
             self.histories = {}
@@ -64,7 +67,7 @@ class Tracking:
                 for i, ic in enumerate(self.ics):
 
                     self.histories[model][ic] = {}
-                    
+
                     for s, seed in enumerate(self.seeds):
 
                         self.histories[model][ic][seed] = {}
@@ -114,7 +117,7 @@ class Tracking:
         The paths returned by tangos include lots of /'s. The load functions expect the format sim/timestep/halo,
         where sim contains no /'s.
 
-        This function reassembles the path into a format tangos can understand, replacing all the /'s in 
+        This function reassembles the path into a format tangos can understand, replacing all the /'s in
         sim with _ sql wildcards.
 
         '''
@@ -132,29 +135,26 @@ class Tracking:
 
 if __name__ == '__main__':
 
-    seed = 'SEED42'
+    seeds = ['SEED42','SEED01','SEED02']
 
-    # ics = ['z2_od_0p950','z2_od_1p000','z2_od_1p050']
-    ics = ['z2_od_1p000','z2_od_1p050']
+    ics = ['z2_od_1p000_merger_z1p7_0p800','z2_od_1p000_merger_z1p7_0p900','z2_od_1p000','z2_od_1p000_merger_z1p7_1p100','z2_od_1p000_merger_z1p7_1p200']
 
-    track = Tracking('vrot_over_sigma','RECAL',ics,default_seed=seed,sim_base='EAGLE_GM')
+    track = Tracking('kappa_co','RECAL',ics,num_seeds=3,sim_base='EAGLE_GM')
 
     for ic in ics:
 
-        history = track.histories['RECAL'][ic][seed]['data']
-        paths = track.histories['RECAL'][ic][seed]['path']
+        for seed in seeds:
 
-        path = paths[np.argmax(history)]
+            history = track.histories['RECAL'][ic][seed]['data']
+            paths = track.histories['RECAL'][ic][seed]['path']
 
-        halo = tangos.get_halo(path)
-        h = halo.load()
+            path = paths[np.argmax(history)]
 
-        track.create_tracker(h.stars,path)
+            halo = tangos.get_halo(path)
+            h = halo.load()
 
-    # print(h.load()) 
-    # print(h.timestep.load_region(pynbody.filt.Sphere('1 kpc',h['shrink_center']))) 
-    # print(h.timestep.load_region(pynbody.filt.Sphere('1000 kpc',h['shrink_center']))) 
+            track.create_tracker(h.stars,path)
 
-
-    
-    
+    # print(h.load())
+    # print(h.timestep.load_region(pynbody.filt.Sphere('1 kpc',h['shrink_center'])))
+    # print(h.timestep.load_region(pynbody.filt.Sphere('1000 kpc',h['shrink_center'])))
