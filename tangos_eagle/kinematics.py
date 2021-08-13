@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+'''
+Modified version of Adrien Thob's routines, for use with tangos_eagle_gm.py
+'''
 
 
 import numpy as np

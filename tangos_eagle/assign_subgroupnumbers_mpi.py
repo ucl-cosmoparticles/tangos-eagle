@@ -1,17 +1,20 @@
+'''
+MPI script for assigning SubGroupNumber and ParticleBindingEnergy to EAGLE snapshots, based on the SUBFIND output particle data.
+Unbound particles are assigned SubGroupNumber 2**30 and ParticleBindingEnergy 0.
+The path to the simulation data is set by a combination of simulation_dir and run_dir, which should be edited by the user.
+'''
+
 import numpy as np
 import h5py as h5
 from sys import argv, exit, stdout
 import glob
 from pathlib import Path
 
-
 from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
 rank = comm.Get_rank()
-
-print(size,rank)
 
 
 def split(container, count):
@@ -52,9 +55,6 @@ tags_split = comm.scatter(tags_split, root=0)
 
 print('Rank: ',rank, ', recvbuf received: ',tags_split)
 
-print('hello???')
-
-
 
 for t, tag in enumerate(tags_split):
     print(tag); flush()
@@ -67,7 +67,7 @@ for t, tag in enumerate(tags_split):
     pdata = {}
 
     empty = False
-    
+
     with h5.File(full_path+'particledata_'+tag+'/eagle_subfind_particles_'+tag+'.0.hdf5','r') as f:
 
         num_part = f['Header'].attrs['NumPart_Total']
@@ -140,10 +140,10 @@ for t, tag in enumerate(tags_split):
 
                     sgn_dataset = f[ptype].create_dataset('SubGroupNumber',data=np.ones(num_this_chunk[snap_ptype_inds[p]],dtype=np.int64)*2**30)
                     bind_dataset = f[ptype].create_dataset('ParticleBindingEnergy',data=np.zeros(num_this_chunk[snap_ptype_inds[p]],dtype=np.float32))
-                
+
                 else:
                     # Do matching!
-                    
+
                     snap_pids = f[ptype]['ParticleIDs']
                     matched_sgns = np.empty(len(snap_pids),dtype=np.int64)
                     matched_bind = np.empty(len(snap_pids),dtype=np.float32)
@@ -156,9 +156,9 @@ for t, tag in enumerate(tags_split):
 
                     # Match subgroupnumbers from particledata.
                     # Since we've already checked the particles exist in the particledata, searchsorted can be used
-                    
+
                     match = np.searchsorted(pdata[ptype]['ParticleIDs'],snap_pids[is_bound])
-                    
+
                     matched_sgns[is_bound] = pdata[ptype]['SubGroupNumber'][match]
                     matched_bind[is_bound] = pdata[ptype]['ParticleBindingEnergy'][match]
 
@@ -169,11 +169,11 @@ for t, tag in enumerate(tags_split):
                 sgn_dataset.attrs['VarDescription'] = 'SUBFIND subhalo the particle is in, matched from particledata files.'
                 sgn_dataset.attrs['aexp-scale-exponent'] = np.float32(0.)
                 sgn_dataset.attrs['h-scale-exponent'] = np.float32(0.)
-                
+
                 bind_dataset.attrs['CGSConversionFactor'] = np.float64(1.989e53)
                 bind_dataset.attrs['VarDescription'] = 'Particle binding energy, units h^-1 U_E [erg]'
                 bind_dataset.attrs['aexp-scale-exponent'] = np.float32(0.)
                 bind_dataset.attrs['h-scale-exponent'] = np.float32(-1.)
-                
+
 
             f.close()
