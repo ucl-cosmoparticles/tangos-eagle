@@ -1,0 +1,60 @@
+#!/bin/bash -l
+
+#SBATCH --ntasks 24
+#SBATCH -J tangos-crosslink
+#SBATCH -o ./logs/crosslink.out
+#SBATCH -e ./logs/crosslink.err
+#SBATCH -p CORES24
+#SBATCH -t 2880 # minutes run time
+
+##########################################################
+
+export TANGOS_TYPE='halo'
+export TANGOS_EXTRAS='' # add --force to recompute
+
+##########################################################
+
+# export LINK1="EAGLE_GM_halo_049_RECAL_z2_od_1p000_SEED42"
+# export LINK1="EAGLE_GM_halo_049_hires_RECAL_z2_od_1p000_SEED42"
+# export LINK1="EAGLE_GM_halo_013_RECAL_z2_od_1p000_SEED42"
+export LINK1="EAGLE_GM_halo_013_DMONLY_z2_od_1p000_SEED42"
+
+##########################################################
+
+sim="halo_013"
+model="DMONLY"
+
+# declare -a arr=("z2_od_1p000_merger_z1p7_0p800" "z2_od_1p000_merger_z1p7_1p100")
+# declare -a arr=("z2_od_1p500" "z2_od_1p300" "z2_od_1p050" "z2_od_0p950" "z2_od_0p666")
+# declare -a arr=("z2_od_1p000_merger_z1p7_0p800_hc" "z2_od_1p000_hc" "z2_od_1p000_merger_z1p7_1p100_hc")
+
+# declare -a arr=("z2_od_1p300" "z2_od_1p500" "z1_od_1p100")
+
+
+# tolink=${arr[$SLURM_ARRAY_TASK_ID]}
+
+tolink="var_0p900"
+
+
+##########################################################
+# Seeds
+
+declare -a seeds=("SEED42" "SEED01" "SEED02" "SEED03" "SEED04" "SEED05" "SEED06" "SEED07" "SEED08")
+
+seed="SEED42"
+# seed=${seeds[$SLURM_ARRAY_TASK_ID]}
+
+
+##########################################################
+
+
+export LINK2="EAGLE_GM_${sim}_${model}_${tolink}_${seed}"
+
+echo $LINK1
+echo $LINK2
+
+# tangos crosslink $LINK1 $LINK2 --type=$TANGOS_TYPE $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos crosslink $LINK1 $LINK2 --backend mpi4py
+
+# mpirun -np $SLURM_NTASKS tangos crosslink $LINK1 $LINK2 --most-bound 0.05 --backend mpi4pyqq
