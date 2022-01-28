@@ -9,10 +9,42 @@ import numpy as np
 # import astropy.units as u
 # from astropy.cosmology import FlatLambdaCDM
 from sys import stdout
+import h5py as h5
+from glob import glob
 
 
 
 
+
+
+
+
+class SUBFIND_centre(PynbodyPropertyCalculation):
+    names = 'subfind_centre_potential'
+
+    def preloop(self, particle_data, timestep_object):
+
+        # Load in the GroupNumbers, SubGroupNumbers and centres of potential from SUBFIND
+
+        from pathlib import Path
+
+        fname = timestep_object.filename
+        tag = fname[-12:]
+
+        fname = Path(fname)
+        subfind_cat = str(Path(fname.parent)) + '/groups_'+tag+'/eagle_subfind_tab_' + tag
+
+        self.cat_gn = catalogue_read(subfind_cat,'GroupNumber','Subhalo')
+        self.cat_sgn = catalogue_read(subfind_cat,'SubGroupNumber','Subhalo')
+        self.cat_cop = catalogue_read(subfind_cat,'CentreOfPotential','Subhalo') * 1e3 * (particle_data.properties['a']/particle_data.properties['h'])
+
+
+    def calculate(self, pdata, existing):
+
+        gn = pdata.dm['GroupNumber'][0]
+        sgn = pdata.dm['SubGroupNumber'][0]
+
+        return self.cat_cop[np.where((self.cat_gn==gn)&(self.cat_sgn==sgn))[0]][0]
 
 
 
@@ -75,9 +107,9 @@ class concentration(PynbodyPropertyCalculation):
             print(coords)
 
             r = np.sqrt(np.einsum('...j,...j->...',coords,coords))
-        
+
             print(r)
-        
+
             bins = np.logspace(1.,np.log10(r200),50)
             bincentres = (bins[:-1]+bins[1:])/2.
 
@@ -110,10 +142,10 @@ class concentration(PynbodyPropertyCalculation):
 
     def requires_property(self):
         return ["shrink_center", "r200"]
-        
 
-        
-        
+
+
+
 
 
 class CGMfractions(PynbodyPropertyCalculation):
@@ -162,6 +194,41 @@ class CGMfractions(PynbodyPropertyCalculation):
         return ["shrink_center", "r200", 'M200']
 
 
+class GalacticGas(PynbodyPropertyCalculation):
+    names = 'Mgas_30kpc_sf', 'Mgas_30kpc_all'
+
+    def preloop(self, particle_data, timestep_object):
+
+        self.handler = timestep_object.simulation.output_handler_class
+
+    def calculate(self, pdata, existing):
+
+        gas_mass = pdata.g['mass']
+
+        if self.handler is input_handlers.eagle.EagleLikeInputHandler:
+            sfr = pdata.g['StarFormationRate']
+            sf = np.where(sfr>0.)[0]
+            # nsf = np.where(sfr==0.)[0]
+
+        elif self.handler is input_handlers.pynbody.ChangaInputHandler:
+            density = pdata.g['rho'].in_units('g cm^-3')
+            temp = pdata.g['temp']
+            sf = np.where((density>0.2*constants.m_p_cgs)&(temp<1e4))[0]
+            # nsf = np.where((density<0.2*constants.m_p_cgs)|(temp>1e4))[0]
+        else:
+            raise IOError('Unknown input handler')
+
+        return np.sum(gas_mass[sf]), np.sum(gas_mass)
+
+    def region_specification(self, existing):
+        return pynbody.filt.Sphere('30 kpc',existing['shrink_center'])
+
+    def requires_property(self):
+        return ["shrink_center"]
+
+
+
+
 class formed_hotphase(PynbodyPropertyCalculation):
     names = 'f_star_hot'
 
@@ -202,7 +269,7 @@ class BH(PynbodyPropertyCalculation):
             bh_locate = np.argmin(np.einsum('...j,...j->...',bh_r,bh_r))
         else:
             bh_locate = np.argmax(bh_masses)
-        
+
 
         E_AGN = (pdata.bh['BH_Mdot'].astype(np.float64).in_units('g s**-1') * BH_erg_per_g).in_units('erg s**-1')
 
@@ -219,7 +286,7 @@ class BH(PynbodyPropertyCalculation):
 
 class BH_detailed_params(PynbodyPropertyCalculation):
     # names = 'M_BH', 'Mdot_BH', 'E_AGN'
-    names = 'BH_CumlAccrMass', 'BH_CumlNumSeeds', 'BH_Density', 'BH_Pressure', 'BH_SoundSpeed', 'BH_Coordinates', 'BH_Velocity', 'BH_EddingtonRate'
+    names = 'BH_CumlAccrMass', 'BH_CumlNumSeeds', 'BH_Density', 'BH_Pressure', 'BH_SoundSpeed', 'BH_Coordinates', 'BH_Velocity', 'BH_EddingtonRate', 'BH_EnergyReservoir', 'BH_AccretionLength'
 
     def preloop(self, particle_data, timestep_object):
 
@@ -230,7 +297,7 @@ class BH_detailed_params(PynbodyPropertyCalculation):
 
         bh_masses = np.array(pdata.bh['BH_Mass'].in_units('Msol'),dtype=np.float64)
         # bh_locate = np.argmax(bh_masses)
-        
+
         # When no BH mass is greater than 10^6.5 (approx. 2x seed mass), pick the BH closest to the centre to prevent instability in selection
         if not np.any(np.log10(bh_masses)>6.5):
             bh_r = pdata.bh['pos']-existing['shrink_center']
@@ -244,13 +311,15 @@ class BH_detailed_params(PynbodyPropertyCalculation):
         # bh_mdot = pdata.bh['BH_Mdot'].in_units('Msol yr^-1')
         bh_pressure = pdata.bh['BH_Pressure'].in_units('g cm^-1 s^-2')
         bh_soundspeed = pdata.bh['BH_SoundSpeed'].in_units('km s^-1')
+        bh_energyreservoir = pdata.bh['BH_EnergyReservoir'].in_units('erg')
         bh_position = pdata.bh['pos']
         bh_vel = pdata.bh['vel']
-        # bh_smoothinglength = pdata.bh['smooth']
+        # bh_surr_vel = pdata.bh['BH_SurroundingGasVel']
+        bh_accretionlength = pdata.bh['BH_AccretionLength']
 
         eddington_rate = ((np.float64(4.*np.pi)*np.float64(constants.G_cgs)*bh_masses*np.float64(constants.m_sol_cgs)*np.float64(constants.m_p_cgs))/(np.float64(0.1*constants.thompson_cgs)*np.float64(constants.c_CGS))) * np.float64(constants.year_s/constants.m_sol_cgs)
 
-        return cuml_accr_mass[bh_locate], cuml_num_seeds[bh_locate], bh_density[bh_locate], bh_pressure[bh_locate], bh_soundspeed[bh_locate], bh_position[bh_locate], bh_vel[bh_locate], eddington_rate[bh_locate]
+        return cuml_accr_mass[bh_locate], cuml_num_seeds[bh_locate], bh_density[bh_locate], bh_pressure[bh_locate], bh_soundspeed[bh_locate], bh_position[bh_locate], bh_vel[bh_locate], eddington_rate[bh_locate], bh_energyreservoir[bh_locate], bh_accretionlength[bh_locate]
 
     def region_specification(self, existing):
         return pynbody.filt.Sphere(existing['r200'],
@@ -262,38 +331,38 @@ class BH_detailed_params(PynbodyPropertyCalculation):
 
 
 class BH_vicinity(PynbodyPropertyCalculation):
-    names = 'BH_soft_ap_mass', 'BH_kpc_ap_mass', 'BH_soft_ap_meandensity', 'BH_kpc_ap_meandensity', 'BH_soft_ap_mediandensity', 'BH_kpc_ap_mediandensity', 'BH_kpc_ap_vrot_over_sigma', 'BH_kpc_ap_sigma0', 'BH_kpc_ap_sigmaZ', 'BH_kpc_ap_kappa', 'BH_kpc_ap_J', 'BH_kpc_ap_vrad', 'BH_kpc_ap_vrad_in', 'BH_kpc_ap_vrad_out','BH_kpc_ap_N'
+    names = 'BH_soft_ap_mass', 'BH_kpc_ap_mass', 'BH_soft_ap_meandensity', 'BH_kpc_ap_meandensity', 'BH_soft_ap_mediandensity', 'BH_kpc_ap_mediandensity', 'BH_kpc_ap_vrot_over_sigma', 'BH_kpc_ap_sigma0', 'BH_kpc_ap_sigmaZ', 'BH_kpc_ap_kappa', 'BH_kpc_ap_J', 'BH_kpc_ap_vrad', 'BH_kpc_ap_vrad_in', 'BH_kpc_ap_vrad_out','BH_kpc_ap_N','BH_acclength_mass', 'BH_acclength_mediandensity', 'BH_acclength_J', 'BH_acclength_kappa', 'BH_Vphi'
 
     def preloop(self, particle_data, timestep_object):
 
         if timestep_object.simulation.output_handler_class is input_handlers.pynbody.ChangaInputHandler:
             raise IOError('Providing class is incompatible with CHANGA. Use the built-in BH class from tangos instead.')
-        
+
         # Get the gravitational softening at this redshift
         z = timestep_object.redshift
         if z >= 2.8:
-            self.softening = 1.33 * 1./(1.+z) # 1.33 comoving kpc 
+            self.softening = 1.33 * 1./(1.+z) # 1.33 comoving kpc
         else:
             self.softening = 0.35
-            
+
         from kinematics import kinematics_diagnostics
 
         self.kinematics = kinematics_diagnostics
-            
+
 
     def calculate(self, pdata, existing):
-        
+
         N_softs_or_kpc = np.arange(1,11)
-        
+
         BH_soft_ap_mass = np.zeros(10)
         BH_kpc_ap_mass = np.zeros(10)
-        
+
         BH_soft_ap_meandensity = np.zeros(10)
         BH_kpc_ap_meandensity = np.zeros(10)
-        
+
         BH_soft_ap_mediandensity = np.zeros(10)
         BH_kpc_ap_mediandensity = np.zeros(10)
-        
+
         BH_kpc_ap_vrot_over_sigma = np.zeros(10)
         BH_kpc_ap_sigma0 = np.zeros(10)
         BH_kpc_ap_sigmaZ = np.zeros(10)
@@ -302,7 +371,7 @@ class BH_vicinity(PynbodyPropertyCalculation):
         BH_kpc_ap_vrad = np.zeros(10)
         BH_kpc_ap_vrad_in = np.zeros(10)
         BH_kpc_ap_vrad_out = np.zeros(10)
-        
+
         BH_kpc_ap_N = np.zeros(10,dtype=np.int64)
 
         # # Centre the velocity wrt the current halo centre
@@ -310,18 +379,47 @@ class BH_vicinity(PynbodyPropertyCalculation):
         #     pynbody.analysis.halo.vel_center(pdata)
         #     transformation.v_translate(target, -vcen)
         # except ValueError:
-        #     # Velocity subtraction failed. 
+        #     # Velocity subtraction failed.
 
         with pynbody.transformation.inverse_translate(pdata,existing['BH_Coordinates']):
-            
+
             pynbody.transformation.v_translate(pdata, -existing['BH_Velocity'])
+
+            bh_h = existing['BH_AccretionLength']
+
+            # Quantities within the accretion length
+            particles = pdata.g[pynbody.filt.Sphere(bh_h)]
+            mass = particles['mass'].in_units('Msol')
+
+            if len(mass) == 0:
+                BH_acclength_mass, BH_acclength_mediandensity, BH_acclength_J, BH_acclength_kappa = 0.,0.,0.,0.
+            else:
+
+                dens = particles['rho'].in_units('g cm^-3')
+                pos = np.array(particles['pos'].in_units('kpc'))
+                vel = np.array(particles['vel'].in_units('km s^-1'))
+                BH_acclength_kappa, _, _, _, _, _, _, _, j = self.kinematics(pos,mass,vel,aperture=existing['BH_AccretionLength'],CoMvelocity=False)
+                BH_acclength_J = j * constants.kpc_SI/1000. # Now in units of km^2 s^-1
+                BH_acclength_mass = np.sum(mass)
+                BH_acclength_mediandensity = np.median(dens)
+
+
+                def kernel(r,h):
+                    return (21./(2.*np.pi*h**3))*np.power(1.-r/h,4.)*(1.+4.*r/h)
+
+                r = np.sqrt(np.einsum('...j,...j->...',pos,pos))
+
+                # V_phi
+                v_phi = np.linalg.norm(np.sum(np.cross(pos,vel)*np.array(mass)[:,np.newaxis]*kernel(r,bh_h)[:,np.newaxis])/(np.sum(np.array(mass)*kernel(r,bh_h))*bh_h))
+
+
 
             for n, nsofts in enumerate(N_softs_or_kpc):
 
                 particles = pdata.g[pynbody.filt.Sphere('%f kpc'%(nsofts*self.softening))]
-                
+
                 mass = particles['mass'].in_units('Msol')
-                
+
                 if len(mass) == 0:
                     BH_soft_ap_mass[n], BH_soft_ap_meandensity[n], BH_soft_ap_mediandensity[n] = 0., 0., 0.
                 else:
@@ -329,21 +427,21 @@ class BH_vicinity(PynbodyPropertyCalculation):
                     dens = particles['rho'].in_units('g cm^-3')
                     BH_soft_ap_meandensity[n] = np.mean(dens)
                     BH_soft_ap_mediandensity[n] = np.median(dens)
-                
-                
+
+
                 particles = pdata.g[pynbody.filt.Sphere('%i kpc'%nsofts)]
 
                 mass = particles['mass'].in_units('Msol')
 
                 if len(mass) != 0:
-                    
+
                     BH_kpc_ap_N[n] = len(mass)
 
                     BH_kpc_ap_mass[n] = np.sum(mass)
                     dens = particles['rho'].in_units('g cm^-3')
                     BH_kpc_ap_meandensity[n] = np.mean(dens)
                     BH_kpc_ap_mediandensity[n] = np.median(dens)
-                    
+
                     pos = np.array(particles['pos'].in_units('kpc'))
                     vel = np.array(particles['vel'].in_units('km s^-1'))
                     r = np.sqrt(np.einsum('...j,...j->...',pos,pos))
@@ -351,17 +449,17 @@ class BH_vicinity(PynbodyPropertyCalculation):
                     for j in range(3): # probably a better way of doing this, but this is hacked from old code
                         r_hat[:,j] = pos[:,j]/r
                     vrad = np.einsum('...j,...j->...',vel,r_hat) # v . rhat -> radial velocity in km s-1
-                    
+
                     infall = np.where(vrad<0.)
                     out = np.where(vrad>0.)
                     BH_kpc_ap_vrad[n] = np.sum(vrad*mass)/np.sum(mass)
                     BH_kpc_ap_vrad_in[n] = np.sum(vrad[infall]*mass[infall])/np.sum(mass[infall])
                     BH_kpc_ap_vrad_out[n] = np.sum(vrad[out]*mass[out])/np.sum(mass[out])
-                        
+
                     BH_kpc_ap_kappa[n], discfrac, BH_kpc_ap_vrot_over_sigma[n], BH_kpc_ap_sigma0[n], BH_kpc_ap_sigmaZ[n], delta, zaxis, momentum_temp, j = self.kinematics(pos,mass,vel,aperture=np.float32(nsofts),CoMvelocity=False)
 
                     # Momentum currently in units of Msol kpc km s^-1
-                    # We want a specific angular momentum 
+                    # We want a specific angular momentum
 
                     # BH_kpc_ap_J[n] = (momentum_temp * constants.kpc_SI/1000.) / np.sum(mass) # Now in units of km^2 s^-1
                     BH_kpc_ap_J[n] = j * constants.kpc_SI/1000. # Now in units of km^2 s^-1
@@ -373,16 +471,16 @@ class BH_vicinity(PynbodyPropertyCalculation):
                     BH_kpc_ap_vrad_in[n] = np.nan
                     BH_kpc_ap_vrad_out[n] = np.nan
 
-        return BH_soft_ap_mass, BH_kpc_ap_mass, BH_soft_ap_meandensity, BH_kpc_ap_meandensity, BH_soft_ap_mediandensity, BH_kpc_ap_mediandensity, BH_kpc_ap_vrot_over_sigma, BH_kpc_ap_sigma0, BH_kpc_ap_sigmaZ, BH_kpc_ap_kappa, BH_kpc_ap_J, BH_kpc_ap_vrad, BH_kpc_ap_vrad_in, BH_kpc_ap_vrad_out, BH_kpc_ap_N
-        
-        
+        return BH_soft_ap_mass, BH_kpc_ap_mass, BH_soft_ap_meandensity, BH_kpc_ap_meandensity, BH_soft_ap_mediandensity, BH_kpc_ap_mediandensity, BH_kpc_ap_vrot_over_sigma, BH_kpc_ap_sigma0, BH_kpc_ap_sigmaZ, BH_kpc_ap_kappa, BH_kpc_ap_J, BH_kpc_ap_vrad, BH_kpc_ap_vrad_in, BH_kpc_ap_vrad_out, BH_kpc_ap_N,BH_acclength_mass, BH_acclength_mediandensity, BH_acclength_J, BH_acclength_kappa, v_phi
+
+
 
     def region_specification(self, existing):
         return pynbody.filt.Sphere(existing['r200'],
                                    existing['shrink_center'])
 
     def requires_property(self):
-        return ["shrink_center", "r200", "BH_Coordinates", "BH_Velocity"]
+        return ["shrink_center", "r200", "BH_Coordinates", "BH_Velocity", "BH_AccretionLength"]
 
 
 
@@ -578,8 +676,8 @@ class exsitu(PynbodyPropertyCalculation):
         self.treedict = {}
 
         for h in timestep_object.halos[:]:
-            
-            
+
+
             a, fid, fname = h.calculate_for_progenitors('a()','finder_id()','halo_filename()')
 
             # Identify each halo by its Tangos finder number at the current timestep
@@ -677,6 +775,37 @@ class exsitu(PynbodyPropertyCalculation):
 
     # def requires_property(self):
     #     return ["a()","finder_id()"]
+
+
+
+
+
+def catalogue_read(subfind_loc,quantity,table):
+    '''
+    Read in FOF or SUBFIND catalogues.
+    NO unit corrections will be done.
+    '''
+
+    assert table in ['FOF','Subhalo'],'table must be either FOF or Subhalo'
+
+    num_chunks = len(glob(subfind_loc+'*.hdf5'))
+
+    for c in range(num_chunks):
+        with h5.File(subfind_loc+'.%i.hdf5'%c,'r') as f:
+
+            if c == 0:
+                data_arr = np.array(f['/'+table+'/%s'%(quantity)])
+            else:
+                data_arr = np.append(data_arr,np.array(f['/'+table+'/%s'%(quantity)]),axis=0)
+
+    return data_arr
+
+
+
+
+
+
+
 
 
 class constants:
