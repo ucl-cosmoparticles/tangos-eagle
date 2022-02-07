@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 '''
 Routines for calculating SPH particle luminosities from the Astrophysical Plasma Emission Code (APEC) and CLOUDY.
+Also: Routines for calculating particle ionisation fractions from Sylvia Bertone's (2010) tables
 '''
 
 
@@ -9,7 +10,7 @@ import h5py as h5
 from sys import exit
 import math
 from copy import deepcopy
-
+import warnings
 
 
 class apec(object):
@@ -497,3 +498,129 @@ class cloudy(object):
         emissivity_per_vol = self.cooling_rate_per_unit_volume_interpolated(p_T,p_n_H,p_num_ratio)
 
         return emissivity_per_vol * p_n_H**2 * (p_mass/p_density)
+
+
+
+
+
+class IonBalance(object):
+    def __init__(self,ion,
+                    ion_table_dir='/share/rcifdata/jdavies/simulations/EAGLE/BG_Tables/IonisationTables/',
+                    ionising_background='HM01G+C'):
+
+        self.ion_lookup = {'Hydrogen':{'roman':['HI',],'label':['h1',],'mass_u':1.00794},
+                        'Helium':{'roman':['HeI','HeII'],'label':['he1','he2'],'mass_u':4.002602},
+                        'Carbon':{'roman':['CI','CII','CIII','CIV','CV','CVI'],'label':['c1','c2','c3','c4','c5','c6'],'mass_u':12.0107},
+                        'Nitrogen':{'roman':['NII','NIII','NIV','NV','NVI','NVII'],'label':['n1','n2','n3','n4','n5','n6','n7'],'mass_u':14.0067},
+                        'Oxygen':{'roman':['OI','OII','OIII','OIV','OV','OVI','OVII','OVIII'],'label':['o1','o2','o3','o4','o5','o6','o7','o8'],'mass_u':15.9994},
+                        'Neon':{'roman':['NeVIII','NeIX','NeX'],'label':['ne8','ne9','ne10'],'mass_u':20.1797},
+                        'Magnesium':{'roman':['MgI','MgII'],'label':['mg1','mg2'],'mass_u':24.3050},
+                        'Silicon':{'roman':['SiII','SiIII','SiIV','SiXIII'],'label':['si2','si3','si4','si13'],'mass_u':28.0855},
+                        'Sulphur':{'roman':['SV',],'label':['s5',],'mass_u':32.065},
+                        'Iron':{'roman':['FeII','FeIII','FeXVII'],'label':['fe2','fe3','fe17'],'mass_u':55.845}}
+
+        self.ion = ion
+        self.element = None
+        self.ionlabel = None
+        for element in self.ion_lookup.keys():
+            if ion in self.ion_lookup[element]['roman']:
+                self.element = element
+                self.ionlabel = self.ion_lookup[element]['label'][self.ion_lookup[element]['roman']==ion]
+                break
+
+
+        with h5.File(ion_table_dir+ionising_background+'/'+self.ionlabel+'.hdf5','r') as table:
+
+            self.ionbal = np.array(table['ionbal'])
+            self.n_H_bins = np.array(table['logd'])
+            self.T_bins = np.array(table['logt'])
+            self.z_bins = np.array(table['redshift'])
+
+
+    def _interpolate_trilinear(datacube,i,j,k,dx,dy,dz):
+        '''
+        3D interpolation.
+        '''
+        Q00 = datacube[i-1,j-1,k-1] * (1.-dx) + datacube[i,j-1,k-1] * dx
+        Q01 = datacube[i-1,j-1,k] * (1.-dx) + datacube[i,j-1,k] * dx
+        Q10 = datacube[i-1,j,k-1] * (1.-dx) + datacube[i,j,k-1] * dx
+        Q11 = datacube[i-1,j,k] * (1.-dx) + datacube[i,j,k] * dx
+
+        Q0 = Q00*(1.-dy) + Q10*dy
+        Q1 = Q01*(1.-dy) + Q11*dy
+
+        return Q0*(1.-dz) + Q1*dz
+
+
+    def ion_fraction_interpolated(self,z,p_T,p_n_H):
+
+        '''
+        Returns the ion fraction of the chosen ion for one or many particles.
+        Obtains this by trilinearly interpolating the tables to the given redshift, T and nH
+        Input temperatures and densities must be logarithmic.
+        '''
+
+        # Copy these in memory before adjusting them
+        p_T = deepcopy(p_T)
+        p_n_H = deepcopy(p_n_H)
+        z = deepcopy(z)
+
+        if np.all(p_T>10.):
+            warnings.warn('It appears input temperatures are not logarithmic. Taking log and continuing...',category=RuntimeWarning)
+            p_T = np.log10(p_T)
+
+        if np.absolute(np.amax(p_n_H))/np.absolute(np.amin(p_n_H)) > 5.:
+            warnings.warn('It appears input densities are not logarithmic. Taking log and continuing...',category=RuntimeWarning)
+            p_n_H = np.log10(p_n_H)
+
+        # If values are out of the CLOUDY bounds, set them to the limits of CLOUDY
+
+        p_T[p_T>np.amax(self.T_bins)] = np.amax(self.T_bins)
+        p_T[p_T<np.amin(self.T_bins)] = np.amin(self.T_bins)
+
+        p_n_H[p_n_H>np.amax(self.n_H_bins)] = np.amax(self.n_H_bins)
+        p_n_H[p_n_H<np.amin(self.n_H_bins)] = np.amin(self.n_H_bins)
+
+        if z>np.amax(self.z_bins):
+            z = np.amax(self.z_bins)
+
+        # Temperatures to interpolate between - these are ARRAYS - one element per particle
+        T_loc = np.searchsorted(self.T_bins,p_T,side='left')
+        T_loc[T_loc==0] = 1 # prevent errors when subtracting 1 from 1st element
+        T1 = self.T_bins[T_loc-1]
+        T2 = self.T_bins[T_loc]
+
+        # Densities to interpolate between - these are ARRAYS - one element per particle
+        n_loc = np.searchsorted(self.n_H_bins,p_n_H,side='left')
+        n_loc[n_loc==0] = 1
+        n1 = self.n_H_bins[n_loc-1]
+        n2 = self.n_H_bins[n_loc]
+
+        # Redshifts to interpolate between - these are ARRAYS - one element per particle
+        z_loc = np.searchsorted(self.z_bins,z,side='left')
+        z_loc[z_loc==0] = 1
+        z1 = self.z_bins[z_loc-1]
+        z2 = self.z_bins[z_loc]
+
+        # Trilinear interpolation
+
+        # self.ionbal[i,j,k]
+        # i=density (hdf5 rows), j=temperature (hdf5 cols), k=redshift (hdf5 depth)
+
+        # Get the coordinate differences
+        dT = (p_T-T1)/(T2-T1)
+        dn = (p_n_H-n1)/(n2-n1)
+        dz = (z-z1)/(z2-z1)
+
+        return self._interpolate_trilinear(self.ionbal,z_loc,T_loc,n_loc,dz,dT,dn)
+
+
+    def mass_in_ion(self,z,p_m,p_n_H,p_T,el_mass_abund):
+
+        ion_fraction = ionbal.find_ionbal(self.z,self.ion,p_n_H, p_temp)
+
+        return p_m * el_mass_abund * self.ion_fraction_interpolated(z,p_T,p_n_H)
+
+    def number_of_ions(self,z,p_m,p_n_H,p_T,el_mass_abund):
+
+        return self.mass_in_ion/(1.989e33*self.ion_lookup[self.element]['mass_u'])
