@@ -538,7 +538,7 @@ class IonBalance(object):
             self.T_bins = np.array(table['logt'])
             self.z_bins = np.array(table['redshift'])
 
-
+    @staticmethod
     def _interpolate_trilinear(datacube,i,j,k,dx,dy,dz):
         '''
         3D interpolation.
@@ -562,10 +562,12 @@ class IonBalance(object):
         Input temperatures and densities must be logarithmic.
         '''
 
-        # Copy these in memory before adjusting them
-        p_T = deepcopy(p_T)
-        p_n_H = deepcopy(p_n_H)
-        z = deepcopy(z)
+        # Copy these in memory before adjusting them.
+        # Converting them to numpy arrays guarantees compatibility with pynbody
+        # If this is not done the interpolation can cause the ion fraction array to have spurious dimensionality
+        p_T = np.array(deepcopy(p_T))
+        p_n_H = np.array(deepcopy(p_n_H))
+        z = np.array(deepcopy(z))
 
         if np.all(p_T>10.):
             warnings.warn('It appears input temperatures are not logarithmic. Taking log and continuing...',category=RuntimeWarning)
@@ -600,7 +602,8 @@ class IonBalance(object):
 
         # Redshifts to interpolate between - these are ARRAYS - one element per particle
         z_loc = np.searchsorted(self.z_bins,z,side='left')
-        z_loc[z_loc==0] = 1
+        if z_loc == 0:
+            z_loc = 1
         z1 = self.z_bins[z_loc-1]
         z2 = self.z_bins[z_loc]
 
@@ -614,15 +617,18 @@ class IonBalance(object):
         dn = (p_n_H-n1)/(n2-n1)
         dz = (z-z1)/(z2-z1)
 
-        return self._interpolate_trilinear(self.ionbal,z_loc,T_loc,n_loc,dz,dT,dn)
+        # return self._interpolate_trilinear(self.ionbal,z_loc,T_loc,n_loc,dz,dT,dn)
+        return self._interpolate_trilinear(self.ionbal,n_loc,T_loc,z_loc,dn,dT,dz)
 
 
-    def mass_in_ion(self,z,p_m,p_n_H,p_T,el_mass_abund):
-
-        ion_fraction = ionbal.find_ionbal(self.z,self.ion,p_n_H, p_temp)
+    def mass_in_ion(self,z,p_m,p_T,p_n_H,el_mass_abund):
 
         return p_m * el_mass_abund * self.ion_fraction_interpolated(z,p_T,p_n_H)
 
-    def number_of_ions(self,z,p_m,p_n_H,p_T,el_mass_abund):
+    def number_of_ions(self,z,p_m,p_T,p_n_H,el_mass_abund):
+        # is m_H right to use here?
+        return self.mass_in_ion(z,p_m,p_T,p_n_H,el_mass_abund)/(1.6737e-24*self.ion_lookup[self.element]['mass_u'])
 
-        return self.mass_in_ion/(1.989e33*self.ion_lookup[self.element]['mass_u'])
+    def mass_to_number(self,mass_in_ion):
+
+        return mass_in_ion/(1.6737e-24*self.ion_lookup[self.element]['mass_u'])
