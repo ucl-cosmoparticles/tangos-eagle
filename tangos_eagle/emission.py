@@ -622,13 +622,24 @@ class IonBalance(object):
 
 
     def mass_in_ion(self,z,p_m,p_T,p_n_H,el_mass_abund):
+        '''
+        Calculate the mass of this ion in the particle. Agnostic to the units of mass, but n_H must be in log(g cm^-3) and T must be in K.
+        el_mass_abund must be m_X/m_tot,particle
+        '''
 
         return p_m * el_mass_abund * self.ion_fraction_interpolated(z,p_T,p_n_H)
 
     def number_of_ions(self,z,p_m,p_T,p_n_H,el_mass_abund):
+        '''
+        Calculate the number of ions in the particle.
+        Expects mass in Msol
+        '''
         # is m_H right to use here?
-        return self.mass_in_ion(z,p_m,p_T,p_n_H,el_mass_abund)/(1.6737e-24*self.ion_lookup[self.element]['mass_u'])
+        return self.mass_in_ion(z,p_m,p_T,p_n_H,el_mass_abund)*1.989e33/(1.6737e-24*self.ion_lookup[self.element]['mass_u'])
 
-    def mass_to_number(self,mass_in_ion):
-
-        return mass_in_ion/(1.6737e-24*self.ion_lookup[self.element]['mass_u'])
+    def mass_to_number(self,mass):
+        '''
+        Convert any mass to a raw number of this ion.
+        Expects mass in Msol. Must recast the mass to float64 to prevent overflow.
+        '''
+        return np.array(mass,dtype=np.float64) * 1.989e33/(1.6737e-24*self.ion_lookup[self.element]['mass_u'])
