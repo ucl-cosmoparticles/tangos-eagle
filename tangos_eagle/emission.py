@@ -525,9 +525,11 @@ class IonBalance(object):
         for element in self.ion_lookup.keys():
             if ion in self.ion_lookup[element]['roman']:
                 self.element = element
-                self.ionlabel = self.ion_lookup[element]['label'][self.ion_lookup[element]['roman']==ion]
+                self.ionlabel = self.ion_lookup[element]['label'][self.ion_lookup[element]['roman'].index(ion)]
                 break
 
+        if self.ionlabel is None:
+            raise ValueError('Please pick a valid ion.')
 
         with h5.File(ion_table_dir+ionising_background+'/'+self.ionlabel+'.hdf5','r') as table:
 
