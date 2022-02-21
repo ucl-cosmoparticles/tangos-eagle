@@ -640,6 +640,6 @@ class IonBalance(object):
     def mass_to_number(self,mass):
         '''
         Convert any mass to a raw number of this ion.
-        Expects mass in Msol. Must recast the mass to float64 to prevent overflow.
+        Expects mass in g. Must recast the mass to float64 to prevent overflow.
         '''
-        return np.array(mass,dtype=np.float64) * 1.989e33/(1.6737e-24*self.ion_lookup[self.element]['mass_u'])
+        return np.array(mass,dtype=np.float64)/(1.6737e-24*self.ion_lookup[self.element]['mass_u'])
