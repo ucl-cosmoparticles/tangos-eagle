@@ -4,9 +4,16 @@
 #SBATCH -J tangos
 #SBATCH -o ./logs/tangos.out
 #SBATCH -e ./logs/tangos.err
-#SBATCH -p UNION40
+#SBATCH -p CORES40
 #SBATCH -t 2880 # minutes run time
 # #SBATCH --exclusive
+
+
+##########################################################
+# Select database
+
+# tangos_mysql is an alias for setting the TANGOS_DB_CONNECTION environment variable
+tangos_mysql eagle
 
 ##########################################################
 
@@ -18,7 +25,7 @@ export TANGOS_MAX_OBJECTS=20
 export TANGOS_TYPE='halo'
 # export TANGOS_LOADMODE='server'
 
-export TANGOS_EXTRAS='--force' # add --force to recompute
+export TANGOS_EXTRAS='--force --verbose' # add --force to recompute
 
 ##########################################################
 # ICs
@@ -26,15 +33,15 @@ export TANGOS_EXTRAS='--force' # add --force to recompute
 declare -a ics=("z2_od_1p000_merger_z1p7_0p800_hc" "z2_od_1p000_hc" "z2_od_1p000_merger_z1p7_1p100_hc")
 
 
-# ic="z2_od_1p000_merger_z1p7_1p200_hc"
-ic=${ics[$SLURM_ARRAY_TASK_ID]}
+ic="z2_od_1p000_hc"
+#ic=${ics[$SLURM_ARRAY_TASK_ID]}
 
 ##########################################################
 # Seeds
 
 declare -a seeds=("SEED42" "SEED01" "SEED02" "SEED03" "SEED04" "SEED05" "SEED06" "SEED07" "SEED08" "SEED09")
 
-seed="SEED03"
+seed="SEED01"
 # seed=${seeds[$SLURM_ARRAY_TASK_ID]}
 
 ##########################################################
@@ -45,41 +52,41 @@ export TANGOS_SIM="EAGLE/GM/${sim}/${model}/${ic}/${seed}"
 ##########################################################
 # Adding simulation to database
 
-# mpirun -np $SLURM_NTASKS python ../tangos_eagle/assign_subgroupnumbers_mpi.py $TANGOS_SIM
-# 
-# tangos add $TANGOS_SIM --max-objects $TANGOS_MAX_OBJECTS
-# 
-# tangos import-properties --for $TANGOS_SIM
-# 
-# mpirun -np $SLURM_NTASKS tangos link --for $TANGOS_SIM --backend mpi4py
+mpirun -np $SLURM_NTASKS python ../tangos_eagle/assign_subgroupnumbers_mpi.py $TANGOS_SIM
+
+tangos add $TANGOS_SIM --max-objects $TANGOS_MAX_OBJECTS
+
+tangos import-properties --for $TANGOS_SIM
+
+mpirun -np $SLURM_NTASKS tangos link --for $TANGOS_SIM --backend mpi4py
 
 
 # ##########################################################
 # # Adding simulation to database
-# 
-# mpirun -np $SLURM_NTASKS tangos write r200 --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# 
-# mpirun -np $SLURM_NTASKS tangos write M200 --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# 
-# mpirun -np $SLURM_NTASKS tangos write finder_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# #
-# mpirun -np $SLURM_NTASKS tangos write finder_star_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# 
-# mpirun -np $SLURM_NTASKS tangos write f_CGM --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# # 
-# 
-# mpirun -np $SLURM_NTASKS tangos write Mstar_30kpc --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+#
 
-# mpirun -np $SLURM_NTASKS tangos write M_BH --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# mpirun -np $SLURM_NTASKS tangos write BH_Density --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+mpirun -np $SLURM_NTASKS tangos write subfind_centre_potential --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write r200 --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write M200 --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write finder_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write finder_star_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write f_CGM --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write Mstar_30kpc --with-prerequisites --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
+mpirun -np $SLURM_NTASKS tangos write M_BH --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+mpirun -np $SLURM_NTASKS tangos write BH_Density --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
 mpirun -np $SLURM_NTASKS tangos write BH_soft_ap_mass --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# 
+
 # mpirun -np $SLURM_NTASKS tangos write f_star_hot --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# #
-# mpirun -np $SLURM_NTASKS tangos write kappa_co --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# # #
-# # mpirun -np $SLURM_NTASKS tangos write f_ex_situ --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
-# #
+
+mpirun -np $SLURM_NTASKS tangos write kappa_co --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
+
 # mpirun -np $SLURM_NTASKS tangos write t_cool_r200 --type=$TANGOS_TYPE --for $TANGOS_SIM --backend mpi4py $TANGOS_EXTRAS
 
 
