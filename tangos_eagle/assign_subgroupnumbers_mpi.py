@@ -9,13 +9,13 @@ import h5py as h5
 from sys import argv, exit, stdout
 import glob
 from pathlib import Path
+from os import getenv
 
 from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
 rank = comm.Get_rank()
-
 
 def split(container, count):
     """
@@ -31,13 +31,13 @@ def flush():
 
 ########################################################################
 
-simulation_dir = '/share/rcifdata/jdavies/simulations/'
+simulation_dir = getenv('TANGOS_SIMULATION_FOLDER')
 
 run_dir = str(argv[1])
 
 ########################################################################
 
-full_path = simulation_dir+run_dir+'/data/'
+full_path = simulation_dir+'/'+run_dir+'/data/'
 
 tags_split = None
 
@@ -101,7 +101,7 @@ for t, tag in enumerate(tags_split):
                     if n_this_file[p]>0:
                         pdata[ptype]['ParticleIDs'][offsets[p]:offsets[p]+n_this_file[p]] = np.array(f[ptype+'/ParticleIDs'],dtype=np.int64)
                         pdata[ptype]['SubGroupNumber'][offsets[p]:offsets[p]+n_this_file[p]] = np.array(f[ptype+'/SubGroupNumber'],dtype=np.int64)
-                        pdata[ptype]['ParticleBindingEnergy'][offsets[p]:offsets[p]+n_this_file[p]] = np.array(f[ptype+'/SubGroupNumber'],dtype=np.float32)
+                        pdata[ptype]['ParticleBindingEnergy'][offsets[p]:offsets[p]+n_this_file[p]] = np.array(f[ptype+'/ParticleBindingEnergy'],dtype=np.float32)
 
                 offsets += n_this_file
 
